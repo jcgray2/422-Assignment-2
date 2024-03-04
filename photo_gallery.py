@@ -1,4 +1,9 @@
 from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, session  # Make sure to import session
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'your_secret_key'  # Set a secret key for session signing
+
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from db import db
@@ -24,10 +29,10 @@ def login():
         username = request.form['username']
         password = request.form['password']
         user = User.query.filter_by(username=username).first()
-        if user and check_password_hash(user.password, password):
+        if user and user.password == password:  # Direct comparison
             session['user_id'] = user.id  # Store the user's ID in the session
             flash('You were successfully logged in')
-            return redirect(url_for('photos'))  # Redirect to the index or a dashboard page
+            return redirect(url_for('photos'))
         else:
             flash('Invalid username or password')
     return render_template('login.html')
