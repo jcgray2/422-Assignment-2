@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo Gallery</title>
+    <style>
+        body {
+            text-align: center; /* Center align the content */
+            padding-top: 20%; /* Adjust based on your preference */
+        }
+        .login-button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Photo Gallery</h1>
+    <!-- This button will route to the login page -->
+    <a href="{{ url_for('login') }}" class="login-button">Login</a>
+</body>
+</html>
