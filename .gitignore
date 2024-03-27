@@ -1,0 +1,37 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Instance folder for Flask
+instance/
+
+# pyenv
+.python-version
+
+# Database files
+*.db
+*.sqlite
+
+# If you're using a SQLite database, consider excluding the file unless it's necessary for production
+
+# Environment files
+.env
+*.env.local
+
+# Flask app config
+.flaskenv
+
+# Folder used by Flask for temporary files
+tmp/

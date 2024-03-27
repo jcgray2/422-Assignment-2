@@ -9,16 +9,27 @@
             text-align: center; /* Center align the content */
             padding-top: 20%; /* Adjust based on your preference */
         }
-        .login-button {
+        .button {
             padding: 10px 20px;
             font-size: 16px;
             cursor: pointer;
+            margin: 10px; /* Adds space between buttons */
+            text-decoration: none; /* Removes underline from links */
+            color: black; /* Text color */
+            border: 1px solid black; /* Adds border to the button */
+            display: inline-block; /* Necessary for applying padding and margins correctly */
+            background-color: white; /* Background color */
+        }
+        .button:hover {
+            background-color: #f0f0f0; /* Changes background on hover for a visual effect */
         }
     </style>
 </head>
 <body>
     <h1>Photo Gallery</h1>
     <!-- This button will route to the login page -->
-    <a href="{{ url_for('login') }}" class="login-button">Login</a>
+    <a href="{{ url_for('login') }}" class="button">Login</a>
+    <!-- Added signup button routing to the signup page -->
+    <a href="{{ url_for('signup') }}" class="button">Sign Up</a>
 </body>
 </html>
