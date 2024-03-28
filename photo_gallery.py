@@ -29,12 +29,20 @@ s3 = boto3.client('s3')
 S3_BUCKET = 'se422-images'
 
 # Function to upload file to S3 bucket
-def upload_file_to_s3(file, bucket_name):
+def upload_file_to_s3(file, bucket_name, username):
     try:
+        # Check if the folder exists, if not create it
+        folder_key = f"{username}/"
+        response = s3.list_objects_v2(Bucket=bucket_name, Prefix=folder_key)
+        if 'Contents' not in response:
+            # Folder doesn't exist, create it
+            s3.put_object(Bucket=bucket_name, Key=(folder_key))
+        
+        # Upload the file to the user's folder in S3
         s3.upload_fileobj(
             file.stream,
             bucket_name,
-            secure_filename(file.filename),
+            f"{folder_key}{secure_filename(file.filename)}",
             ExtraArgs={'ContentType': file.content_type}
         )
         return True
@@ -124,16 +132,16 @@ def upload():
             return redirect(request.url)
         
         if file and allowed_file(file.filename):
-            # Upload the file to S3
-            if upload_file_to_s3(file, S3_BUCKET):
-                # Get username from session
-                username = session.get('username')
-                
+            # Get username from session
+            username = session.get('username')
+            
+            # Upload the file to S3 with the username
+            if upload_file_to_s3(file, S3_BUCKET, username):
                 # Generate a unique ID for the photo using UUID
                 photo_id = str(uuid.uuid4())
                 
                 # Construct the file path in S3
-                file_path = f"https://{S3_BUCKET}.s3.amazonaws.com/{secure_filename(file.filename)}"
+                file_path = f"https://{S3_BUCKET}.s3.amazonaws.com/{username}/{secure_filename(file.filename)}"
                 
                 # Store photo details in DynamoDB
                 photosTable.put_item(Item={
