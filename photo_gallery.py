@@ -81,7 +81,7 @@ def photo_gallery():
     
     # Here you would typically fetch the user's photos from DynamoDB or wherever they're stored
     # For now, we'll just return a simple message or render a template
-    return 'Welcome to the Photo Gallery!'  # Or render_template('photo_gallery.html')
+    return 'Welcome to the Photo Gallery!!!'  # Or render_template('photo_gallery.html')
 
 
 if __name__ == '__main__':
