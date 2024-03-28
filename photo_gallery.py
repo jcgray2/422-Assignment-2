@@ -1,5 +1,6 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
 import boto3
+from boto3.dynamodb.conditions import Key, Attr
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
@@ -142,12 +143,16 @@ def upload():
                 
                 # Construct the file path in S3
                 file_path = f"https://{S3_BUCKET}.s3.amazonaws.com/{username}/{secure_filename(file.filename)}"
+		
+		#Filename
+                file_name = file.filename
                 
                 # Store photo details in DynamoDB
                 photosTable.put_item(Item={
                     'id': photo_id,
                     'username': username,
-                    'file_path': file_path
+                    'file_path': file_path,
+                    'image_name': file_name
                 })
                 
                 flash('File uploaded successfully')
@@ -163,7 +168,25 @@ def allowed_file(filename):
 
 @app.route('/download', methods=['GET', 'POST'])
 def download():
+    if request.method == 'POST':
+        image_name = request.form.get('image_name')
+        username = session.get('username')
+        
+        # Query DynamoDB for the user's photos matching the provided image name
+        try:
+            response = photosTable.scan(
+                FilterExpression=Attr('username').eq(username) & Attr('image_name').contains(image_name.lower())
+            )
+            images = response['Items']
+            # print("Images", images)
+        except Exception as e:
+            flash('Error searching for images. Please try again.')
+            return redirect(url_for('download'))
+        
+        return render_template('download.html', images=images)
+    
     return render_template('download.html')
+
 
 #===========================================================================
 
