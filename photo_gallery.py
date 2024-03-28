@@ -12,11 +12,60 @@ app.config['UPLOAD_FOLDER'] = 'path/to/upload/directory'
 # Initialize a DynamoDB client
 dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
 table = dynamodb.Table('Users')  # DynamoDB table for Users
+photos_table = dynamodb.Table('Photos')  # DynamoDB table for photos
 
 # Import models after db and app have been defined
 # Assuming 'models.py' includes definitions for User (SQL) and Photo (SQL) models
 from models import db, User, Photo
 db.init_app(app)
+
+#===================================
+# Initialize an S3 client
+s3 = boto3.client('s3')
+
+# Configuration
+S3_BUCKET = 'se422-images'
+
+# Function to upload file to S3 bucket
+def upload_file_to_s3(file, bucket_name):
+    try:
+        s3.upload_fileobj(
+            file.stream,
+            bucket_name,
+            secure_filename(file.filename),
+            ExtraArgs={'ContentType': file.content_type}
+        )
+        # Extract metadata from image
+        metadata = extract_metadata(file)
+
+        # Store metadata in DynamoDB
+        if metadata:
+            photos_table.put_item(
+                Item={
+                    'filename': secure_filename(file.filename),
+                    'metadata': metadata
+                }
+            )
+        return True
+    except Exception as e:
+        print("Error uploading file to S3:", e)
+        return False
+
+# Function to extract metadata from image file
+def extract_metadata(file):
+    try:
+        image = Image.open(file)
+        metadata = {
+            'width': image.width,
+            'height': image.height,
+            'format': image.format,
+            # You can add more metadata attributes as needed
+        }
+        return metadata
+    except Exception as e:
+        print("Error extracting metadata:", e)
+        return None
+#============================================================
 
 @app.route('/')
 def index():
@@ -81,8 +130,37 @@ def photo_gallery():
     
     # Here you would typically fetch the user's photos from DynamoDB or wherever they're stored
     # For now, we'll just return a simple message or render a template
-    return 'Welcome to the Photo Gallery!!!'  # Or render_template('photo_gallery.html')
+    # return 'Welcome to the Photo Gallery!'  
+    return render_template('photo_gallery.html')
 
+#=================================================
+@app.route('/upload', methods=['GET', 'POST'])
+def upload():
+    if request.method == 'POST':
+        if 'photo' not in request.files:
+            flash('No file part')
+            return redirect(request.url)
+        file = request.files['photo']
+        if file.filename == '':
+            flash('No selected file')
+            return redirect(request.url)
+        if file and allowed_file(file.filename):
+            if upload_file_to_s3(file, S3_BUCKET):
+                flash('File uploaded successfully')
+                return redirect(url_for('upload'))
+            else:
+                flash('Error uploading file to S3')
+                return redirect(request.url)
+    return render_template('upload.html')
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg', 'gif'}
+
+@app.route('/download', methods=['GET', 'POST'])
+def download():
+    return render_template('download.html')
+
+#===========================================================================
 
 if __name__ == '__main__':
     with app.app_context():
