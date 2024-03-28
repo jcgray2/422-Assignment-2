@@ -3,6 +3,8 @@ import boto3
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
+#======================================================================
+import uuid
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = '748957203498572340598'
@@ -10,7 +12,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://admin:123123123@databas
 app.config['UPLOAD_FOLDER'] = 'path/to/upload/directory'
 
 # Initialize a DynamoDB client
-dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
+dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 table = dynamodb.Table('Users')  # DynamoDB table for Users
 photosTable = dynamodb.Table('Photos')  # DynamoDB table for photos
 
@@ -114,17 +116,38 @@ def upload():
         if 'photo' not in request.files:
             flash('No file part')
             return redirect(request.url)
+        
         file = request.files['photo']
+        
         if file.filename == '':
             flash('No selected file')
             return redirect(request.url)
+        
         if file and allowed_file(file.filename):
+            # Upload the file to S3
             if upload_file_to_s3(file, S3_BUCKET):
+                # Get username from session
+                username = session.get('username')
+                
+                # Generate a unique ID for the photo using UUID
+                photo_id = str(uuid.uuid4())
+                
+                # Construct the file path in S3
+                file_path = f"https://{S3_BUCKET}.s3.amazonaws.com/{secure_filename(file.filename)}"
+                
+                # Store photo details in DynamoDB
+                photosTable.put_item(Item={
+                    'id': photo_id,
+                    'username': username,
+                    'file_path': file_path
+                })
+                
                 flash('File uploaded successfully')
                 return redirect(url_for('upload'))
             else:
                 flash('Error uploading file to S3')
                 return redirect(request.url)
+    
     return render_template('upload.html')
 
 def allowed_file(filename):
