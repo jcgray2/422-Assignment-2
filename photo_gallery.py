@@ -12,7 +12,7 @@ app.config['UPLOAD_FOLDER'] = 'path/to/upload/directory'
 # Initialize a DynamoDB client
 dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
 table = dynamodb.Table('Users')  # DynamoDB table for Users
-photos_table = dynamodb.Table('Photos')  # DynamoDB table for photos
+photosTable = dynamodb.Table('Photos')  # DynamoDB table for photos
 
 # Import models after db and app have been defined
 # Assuming 'models.py' includes definitions for User (SQL) and Photo (SQL) models
@@ -35,36 +35,10 @@ def upload_file_to_s3(file, bucket_name):
             secure_filename(file.filename),
             ExtraArgs={'ContentType': file.content_type}
         )
-        # Extract metadata from image
-        metadata = extract_metadata(file)
-
-        # Store metadata in DynamoDB
-        if metadata:
-            photos_table.put_item(
-                Item={
-                    'filename': secure_filename(file.filename),
-                    'metadata': metadata
-                }
-            )
         return True
     except Exception as e:
         print("Error uploading file to S3:", e)
         return False
-
-# Function to extract metadata from image file
-def extract_metadata(file):
-    try:
-        image = Image.open(file)
-        metadata = {
-            'width': image.width,
-            'height': image.height,
-            'format': image.format,
-            # You can add more metadata attributes as needed
-        }
-        return metadata
-    except Exception as e:
-        print("Error extracting metadata:", e)
-        return None
 #============================================================
 
 @app.route('/')
