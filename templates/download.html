@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search & Download</title>
+</head>
+<body>
+    <h1>Search & Download</h1>
+    <form action="/download" method="post">
+        <label for="image_name">Enter image name:</label>
+        <input type="text" id="image_name" name="image_name" required>
+        <button type="submit">Search</button>
+    </form>
+
+    <h2>Images:</h2>
+    <ul>
+        {% for image in images %}
+            <li>
+                <a href="{{ image.file_path }}" download="{{ image.image_name }}">
+                    {{ image.image_name }}
+                </a>
+                <br>
+                <img src="{{ image.file_path }}" alt="{{ image.image_name }}" style="max-width: 300px;">
+            </li>
+        {% endfor %}
+    </ul>
+    <br>
+    <a href="{{ url_for('photo_gallery') }}" class="button">Home</a>
+</body>
+</html>
