@@ -7,10 +7,11 @@
 <body>
     <h1>Login</h1>
     <form action="{{ url_for('login') }}" method="post">
+        {{ form.hidden_tag() }}  <!-- CSRF token -->
         <label for="username">Username:</label>
-        <input type="text" id="username" name="username" required>
+        {{ form.username(size=32, required=True, id="username") }}
         <label for="password">Password:</label>
-        <input type="password" id="password" name="password" required>
+        {{ form.password(size=32, required=True, id="password") }}
         <button type="submit">Login</button>
     </form>
 </body>

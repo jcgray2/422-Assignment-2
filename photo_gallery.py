@@ -7,6 +7,10 @@ from werkzeug.utils import secure_filename
 import os
 from pymongo import MongoClient
 import uuid
+from flask_wtf import FlaskForm
+from wtforms import StringField, PasswordField, SubmitField
+from wtforms.validators import InputRequired, Length
+
 
 client = MongoClient('mongodb://localhost:27017/')
 db = client['422']  
@@ -25,8 +29,15 @@ S3_BUCKET = 'se422-images'
 def index():
     return render_template('index.html')
 
+class LoginForm(FlaskForm):
+    username = StringField('Username', validators=[InputRequired(), Length(min=1, max=32)])
+    password = PasswordField('Password', validators=[InputRequired(), Length(min=1, max=32)])
+    submit = SubmitField('Login')
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    form = LoginForm()  # Create an instance of the LoginForm class
+    
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -34,14 +45,15 @@ def login():
         # Retrieve user from MongoDB
         user = users_collection.find_one({'username': username})
         
-        if user and check_password_hash(user['password'], password):
-            session['username'] = username
+        if user and check_password_hash(user['password_hash'], password):
+            session['username'] = username  # Store username in session
             flash('Logged in successfully!')
-            return redirect(url_for('index'))  # Assuming you have an index route
+            return redirect(url_for('photo_gallery'))  # Assuming you have an index route
         else:
             flash('Invalid username or password.')
+            print("Invalid username or password.")  # Log the error for debugging
     
-    return render_template('login.html')
+    return render_template('login.html', form=form)
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
@@ -58,14 +70,19 @@ def signup():
             flash('Username already exists.')
             return redirect(url_for('signup'))
         
-        # Add new user to MongoDB
-        users_collection.insert_one({
-            'username': username,
-            'password': password_hash  # Store hashed password
-        })
+        try:
+            # Add new user to MongoDB
+            users_collection.insert_one({
+                'username': username,
+                'password': password,
+                'password_hash': password_hash  # Store hashed password
+            })
+            flash('Account created successfully. Please log in.')
+            return redirect(url_for('login'))
         
-        flash('Account created successfully. Please log in.')
-        return redirect(url_for('login'))
+        except Exception as e:
+            flash('Error creating account. Please try again.')
+            print(f"Error: {e}")  # Log the error for debugging
     
     return render_template('signup.html')
 
