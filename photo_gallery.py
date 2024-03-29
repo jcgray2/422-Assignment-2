@@ -38,7 +38,7 @@ class LoginForm(FlaskForm):
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    form = LoginForm()  # Create an instance of the LoginForm class
+    form = LoginForm()  # Create an instance of the LoginForm class not really used but whatever it was a good idea
     
     if request.method == 'POST':
         username = request.form['username']
@@ -50,7 +50,7 @@ def login():
         if user and check_password_hash(user['password_hash'], password):
             session['username'] = username  # Store username in session
             flash('Logged in successfully!')
-            return redirect(url_for('photo_gallery'))  # Assuming you have an index route
+            return redirect(url_for('photo_gallery'))  
         else:
             flash('Invalid username or password.')
             print("Invalid username or password.")  # Log the error for debugging
