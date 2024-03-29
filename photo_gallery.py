@@ -1,17 +1,15 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_pymongo import PyMongo
 from werkzeug.security import generate_password_hash, check_password_hash
-import boto3
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = '748957203498572340598'
-app.config['MONGO_URI'] = 'mongodb://localhost:27017'  # MongoDB URI
+app.config['MONGO_URI'] = 'mongodb://localhost:27017/422'  # MongoDB URI
 
 mongo = PyMongo(app)
 
-# Initialize a DynamoDB client
-dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
-table = dynamodb.Table('Users')  # DynamoDB table for Users
+# Import models after db and app have been defined
+from models import User, Photo
 
 @app.route('/')
 def index():
@@ -23,15 +21,18 @@ def login():
         username = request.form['username']
         password = request.form['password']
         
-        # Query MongoDB for the user
-        user = mongo.db.users.find_one({'username': username})
-        if user and check_password_hash(user['password'], password):
-            # Successful login
-            session['username'] = username
-            return redirect(url_for('photo_gallery'))
+        # Check MongoDB connection
+        if mongo.db is not None:
+            user = mongo.db.users.find_one({'username': username})
+            if user and check_password_hash(user['password'], password):
+                # Successful login
+                session['username'] = username
+                return redirect(url_for('photo_gallery'))
+            else:
+                # Invalid credentials
+                flash('Invalid username or password.')
         else:
-            # Invalid credentials
-            flash('Invalid username or password.')
+            flash('Failed to connect to the database. Please try again later.')
     
     return render_template('login.html')
 
