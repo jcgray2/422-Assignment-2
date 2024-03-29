@@ -205,6 +205,12 @@ def download():
                 'username': username,
                 'image_name': {'$regex': f'.*{image_name.lower()}.*'}
             }))
+            
+            for image in images:
+                # Generate S3 URL for the image
+                s3_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{username}/{image['image_name']}"
+                image['file_path'] = s3_url
+                
         except Exception as e:
             flash('Error searching for images. Please try again.')
             return redirect(url_for('download'))
