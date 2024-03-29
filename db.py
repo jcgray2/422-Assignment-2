@@ -1,3 +1,3 @@
 # db.py
-from flask_sqlalchemy import SQLAlchemy
-db = SQLAlchemy()
+from flask_pymongo import PyMongo
+db = PyMongo()
