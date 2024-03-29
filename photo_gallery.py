@@ -1,90 +1,157 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
+from db import mongo  # Corrected import
 import boto3
+from boto3.dynamodb.conditions import Key, Attr
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
+from pymongo import MongoClient
+import uuid
+from flask_wtf import FlaskForm
+from wtforms import StringField, PasswordField, SubmitField
+from wtforms.validators import InputRequired, Length
 
+
+client = MongoClient('mongodb://localhost:27017/')
+db = client['422']  
+users_collection = db['users']  # MongoDB collection for users
 app = Flask(__name__)
 app.config['SECRET_KEY'] = '748957203498572340598'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://admin:123123123@database-1.cng84gieuv3y.us-east-2.rds.amazonaws.com/422'
-app.config['UPLOAD_FOLDER'] = 'path/to/upload/directory'
+app.config['MONGO_URI'] = 'mongodb://localhost:27017/422'
 
-# Initialize a DynamoDB client
-dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
-table = dynamodb.Table('Users')  # DynamoDB table for Users
+mongo.init_app(app)
 
-# Import models after db and app have been defined
-# Assuming 'models.py' includes definitions for User (SQL) and Photo (SQL) models
-from models import db, User, Photo
-db.init_app(app)
+# Initialize an S3 client
+s3 = boto3.client('s3')
+S3_BUCKET = 'se422-images'
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
+class LoginForm(FlaskForm):
+    username = StringField('Username', validators=[InputRequired(), Length(min=1, max=32)])
+    password = PasswordField('Password', validators=[InputRequired(), Length(min=1, max=32)])
+    submit = SubmitField('Login')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    form = LoginForm()  # Create an instance of the LoginForm class
+    
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
         
-        # Query DynamoDB for the user
-        try:
-            response = table.get_item(Key={'username': username})
-        except Exception as e:
-            flash('Login failed. Please try again.')
-            return redirect(url_for('login'))
+        # Retrieve user from MongoDB
+        user = users_collection.find_one({'username': username})
         
-        user = response.get('Item')
         if user and check_password_hash(user['password_hash'], password):
-            # Successful login
-            session['username'] = username  # You can store more in session as needed
-            return redirect(url_for('photo_gallery'))  # Adjust the redirect as needed
+            session['username'] = username  # Store username in session
+            flash('Logged in successfully!')
+            return redirect(url_for('photo_gallery'))  # Assuming you have an index route
         else:
-            # Invalid credentials
             flash('Invalid username or password.')
+            print("Invalid username or password.")  # Log the error for debugging
     
-    return render_template('login.html')
+    return render_template('login.html', form=form)
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
+        
+        # Generate hashed password
         password_hash = generate_password_hash(password)
         
         # Check if username already exists
-        response = table.get_item(Key={'username': username})
-        if 'Item' in response:
+        existing_user = users_collection.find_one({'username': username})
+        if existing_user:
             flash('Username already exists.')
             return redirect(url_for('signup'))
         
-        # Add new user to DynamoDB
-        table.put_item(Item={
-            'username': username,
-            'password_hash': password_hash
-        })
+        try:
+            # Add new user to MongoDB
+            users_collection.insert_one({
+                'username': username,
+                'password': password,
+                'password_hash': password_hash  # Store hashed password
+            })
+            flash('Account created successfully. Please log in.')
+            return redirect(url_for('login'))
         
-        flash('Account created successfully. Please log in.')
-        return redirect(url_for('login'))
+        except Exception as e:
+            flash('Error creating account. Please try again.')
+            print(f"Error: {e}")  # Log the error for debugging
     
     return render_template('signup.html')
 
-
 @app.route('/photo_gallery')
 def photo_gallery():
-    # Ensure the user is logged in
     if 'username' not in session:
         flash('You must be logged in to view the gallery.')
         return redirect(url_for('login'))
     
-    # Here you would typically fetch the user's photos from DynamoDB or wherever they're stored
-    # For now, we'll just return a simple message or render a template
-    return 'Welcome to the Photo Gallery!!!'  # Or render_template('photo_gallery.html')
+    return render_template('photo_gallery.html')
 
+@app.route('/upload', methods=['GET', 'POST'])
+def upload():
+    if request.method == 'POST':
+        if 'photo' not in request.files:
+            flash('No file part')
+            return redirect(request.url)
+        
+        file = request.files['photo']
+        
+        if file.filename == '':
+            flash('No selected file')
+            return redirect(request.url)
+        
+        if file and allowed_file(file.filename):
+            username = session.get('username')
+            
+            if upload_file_to_s3(file, S3_BUCKET, username):
+                photo_id = str(uuid.uuid4())
+                file_path = f"https://{S3_BUCKET}.s3.amazonaws.com/{username}/{secure_filename(file.filename)}"
+                file_name = file.filename
+                
+                # Here, you need to implement photosTable or integrate with MongoDB as per your requirement
+                # photosTable.put_item(Item={
+                #     'id': photo_id,
+                #     'username': username,
+                #     'file_path': file_path,
+                #     'image_name': file_name
+                # })
+                
+                flash('File uploaded successfully')
+                return redirect(url_for('upload'))
+            else:
+                flash('Error uploading file to S3')
+                return redirect(request.url)
+    
+    return render_template('upload.html')
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg', 'gif'}
+
+@app.route('/download', methods=['GET', 'POST'])
+def download():
+    if request.method == 'POST':
+        image_name = request.form.get('image_name')
+        username = session.get('username')
+        
+        try:
+            response = photosTable.scan(
+                FilterExpression=Attr('username').eq(username) & Attr('image_name').contains(image_name.lower())
+            )
+            images = response['Items']
+        except Exception as e:
+            flash('Error searching for images. Please try again.')
+            return redirect(url_for('download'))
+        
+        return render_template('download.html', images=images)
+    
+    return render_template('download.html')
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()  # Create database tables for SQL models
     app.run(debug=True)

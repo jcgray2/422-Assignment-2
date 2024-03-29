@@ -7,11 +7,15 @@
 </head>
 <body>
     <h1>Photos</h1>
+    <a href="{{ url_for('upload') }}" class="button">Upload</a>
+    <br>
+    <a href="{{ url_for('download') }}" class="button">Search & Download</a>
+
     
+    <br><br>
     <!-- Replace "image1.jpg", "image2.jpg", etc. with the actual paths to the images on your EC2 instance -->
-    <img src="http://18.116.241.118/home/ubuntu/images/wp5121857.jpg" alt="Image 1">
+    <img src="image1.jpg" alt="Image 1">
     <!-- Add more <img> tags for additional images -->
 
 </body>
 </html>
-
