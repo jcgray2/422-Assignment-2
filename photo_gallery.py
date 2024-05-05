@@ -12,8 +12,10 @@ from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import InputRequired, Length
 
 
+
 client = MongoClient('mongodb://localhost:27017/')
 db = client['422']  
+photos_collection = db['photos']
 users_collection = db['users']  # MongoDB collection for users
 app = Flask(__name__)
 app.config['SECRET_KEY'] = '748957203498572340598'
@@ -36,7 +38,7 @@ class LoginForm(FlaskForm):
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    form = LoginForm()  # Create an instance of the LoginForm class
+    form = LoginForm()  # Create an instance of the LoginForm class not really used but whatever it was a good idea
     
     if request.method == 'POST':
         username = request.form['username']
@@ -48,7 +50,7 @@ def login():
         if user and check_password_hash(user['password_hash'], password):
             session['username'] = username  # Store username in session
             flash('Logged in successfully!')
-            return redirect(url_for('photo_gallery'))  # Assuming you have an index route
+            return redirect(url_for('photo_gallery'))  
         else:
             flash('Invalid username or password.')
             print("Invalid username or password.")  # Log the error for debugging
@@ -94,6 +96,62 @@ def photo_gallery():
     
     return render_template('photo_gallery.html')
 
+def upload_file_to_s3(file, bucket_name, username):
+    try:
+        # Check if the folder exists, if not create it
+        photo_id = str(uuid.uuid4())
+        file_path = f"uploads/{username}/{secure_filename(file.filename)}"
+        file_name = file.filename
+        folder_key = f"{username}/"
+        response = s3.list_objects_v2(Bucket=bucket_name, Prefix=folder_key)
+        if 'Contents' not in response:
+            # Folder doesn't exist, create it
+            s3.put_object(Bucket=bucket_name, Key=(folder_key))
+        
+        # Upload the file to the user's folder in S3
+        s3.upload_fileobj(
+            file.stream,
+            bucket_name,
+            f"{folder_key}{secure_filename(file.filename)}",
+            ExtraArgs={'ContentType': file.content_type}
+        )
+
+        photos_collection.insert_one({
+        'id': photo_id,
+        'username': username,
+        'file_path': file_path,
+        'image_name': file_name
+    })
+        return True
+    except Exception as e:
+        print("Error uploading file to S3:", e)
+        return False
+
+def upload_file_to_mongodb(file, username):
+    try:
+        # Upload the file to MongoDB
+        photo_id = str(uuid.uuid4())
+        file_path = f"uploads/{username}/{secure_filename(file.filename)}"
+        file_name = file.filename
+
+        # Save file to server
+        if not os.path.exists(f"uploads/{username}/"):
+            os.makedirs(f"uploads/{username}/")
+        file.save(os.path.join(f"uploads/{username}/", secure_filename(file.filename)))
+
+        # Insert metadata into MongoDB
+        photos_collection.insert_one({
+            'id': photo_id,
+            'username': username,
+            'file_path': file_path,
+            'image_name': file_name
+        })
+
+        return True
+    except Exception as e:
+        print("Error uploading file to MongoDB:", e)
+        return False
+
 @app.route('/upload', methods=['GET', 'POST'])
 def upload():
     if request.method == 'POST':
@@ -110,18 +168,19 @@ def upload():
         if file and allowed_file(file.filename):
             username = session.get('username')
             
-            if upload_file_to_s3(file, S3_BUCKET, username):
+            s3_url = upload_file_to_s3(file, S3_BUCKET, username)
+            
+            if s3_url:
                 photo_id = str(uuid.uuid4())
-                file_path = f"https://{S3_BUCKET}.s3.amazonaws.com/{username}/{secure_filename(file.filename)}"
                 file_name = file.filename
                 
-                # Here, you need to implement photosTable or integrate with MongoDB as per your requirement
-                # photosTable.put_item(Item={
-                #     'id': photo_id,
-                #     'username': username,
-                #     'file_path': file_path,
-                #     'image_name': file_name
-                # })
+                # Insert metadata into MongoDB
+                photos_collection.insert_one({
+                    'id': photo_id,
+                    'username': username,
+                    'file_path': s3_url,
+                    'image_name': file_name
+                })
                 
                 flash('File uploaded successfully')
                 return redirect(url_for('upload'))
@@ -134,6 +193,7 @@ def upload():
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg', 'gif'}
 
+
 @app.route('/download', methods=['GET', 'POST'])
 def download():
     if request.method == 'POST':
@@ -141,10 +201,16 @@ def download():
         username = session.get('username')
         
         try:
-            response = photosTable.scan(
-                FilterExpression=Attr('username').eq(username) & Attr('image_name').contains(image_name.lower())
-            )
-            images = response['Items']
+            images = list(photos_collection.find({
+                'username': username,
+                'image_name': {'$regex': f'.*{image_name.lower()}.*'}
+            }))
+            
+            for image in images:
+                # Generate S3 URL for the image
+                s3_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{username}/{image['image_name']}"
+                image['file_path'] = s3_url
+                
         except Exception as e:
             flash('Error searching for images. Please try again.')
             return redirect(url_for('download'))
